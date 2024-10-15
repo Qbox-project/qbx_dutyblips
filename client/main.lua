@@ -1,32 +1,39 @@
-local officerBlips = {}
+local sharedConfig = require 'config.shared'
+local playerBlips = {}
 
 ---@param playerId number
-local function removeOfficer(playerId)
-    local blip = officerBlips[playerId]
+local function removePlayer(playerId)
+    local blip = playerBlips[playerId]
 
     if blip then
         RemoveBlip(blip)
-        officerBlips[playerId] = nil
+        playerBlips[playerId] = nil
     end
 end
 
-RegisterNetEvent('qbx_police:client:removeOfficer', removeOfficer)
+RegisterNetEvent('qbx_dutyblips:client:removePlayer', removePlayer)
 
-RegisterNetEvent('qbx_police:client:updatePositions', function(officers)
-    for i = 1, #officers do
-        local officer = officers[i]
-        local blip = officerBlips[officer.playerId]
+RegisterNetEvent('qbx_dutyblips:client:updatePositions', function(players)
+    for i = 1, #players do
+        local player = players[i]
+        local blip = playerBlips[player.playerId]
 
         if not blip then
-            local label = ('leo:%s'):format(officer.playerId)
-            local name = ('%s | %s. %s'):format(officer.callsign, officer.firstName:sub(1, 1):upper(), officer.lastName)
+            local label = ('player:%s'):format(player.playerId)
+            local name = ('%s. %s'):format(player.firstName:sub(1, 1):upper(), player.lastName)
 
-            blip = AddBlipForEntity(GetPlayerPed(GetPlayerFromServerId(officer.playerId)))
+            if player.group == 'police' or player.group == 'ambulance' then
+                name = ('%s | %s. %s'):format(player.callsign, player.firstName:sub(1, 1):upper(), player.lastName)
+            end
 
-            officerBlips[officer.playerId] = blip
+            blip = AddBlipForEntity(GetPlayerPed(GetPlayerFromServerId(player.playerId)))
 
-            SetBlipSprite(blip, 1)
-            SetBlipColour(blip, 42)
+            playerBlips[player.playerId] = blip
+
+            local group = sharedConfig.groups[player.group]
+
+            SetBlipSprite(blip, group.sprite or 1)
+            SetBlipColour(blip, group.color or 42)
             SetBlipDisplay(blip, 3)
             SetBlipAsShortRange(blip, true)
             SetBlipDisplay(blip, 2)

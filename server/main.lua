@@ -1,95 +1,97 @@
 local config = require 'config.server'
-local activeOfficers = {}
+local sharedConfig = require 'config.shared'
+local activePlayers = {}
 
 ---@param name string
 ---@param data any
-local function triggerOfficerEvent(name, data)
-    for playerId in pairs(activeOfficers) do
+local function triggerPlayersEvent(name, data)
+    for playerId in pairs(activePlayers) do
         TriggerClientEvent(name, playerId, data)
     end
 end
 
 ---@param playerId number
-local function getOfficer(playerId)
-    return activeOfficers[playerId]
+local function getPlayer(playerId)
+    return activePlayers[playerId]
 end
 
 ---@param playerId number
-local function removeOfficer(playerId)
-    triggerOfficerEvent('qbx_police:client:removeOfficer', playerId)
+local function removePlayer(playerId)
+    triggerPlayersEvent('qbx_dutyblips:client:removePlayer', playerId)
 
-    activeOfficers[playerId] = nil
+    activePlayers[playerId] = nil
 end
 
 ---@param playerId number
-local function addOfficer(playerId)
+local function addPlayer(playerId)
     local player = exports.qbx_core:GetPlayer(playerId)
 
-    if not player or player.PlayerData.job.type ~= 'leo' then return end
+    if not player then return end
 
-    activeOfficers[playerId] = {
+    local groups = {}
+
+    for group in pairs(sharedConfig.groups) do
+        groups[group] = true
+    end
+
+    local hasGroup = exports.qbx_core:HasPrimaryGroup(playerId, groups)
+
+    if not hasGroup then return end
+
+    activePlayers[playerId] = {
         firstName = player.PlayerData.charinfo.firstname,
         lastName = player.PlayerData.charinfo.lastname,
-        callsign = player.PlayerData.metadata.callsign,
         playerId = playerId,
         group = player.PlayerData.job.name,
         grade = player.PlayerData.job.grade.label,
-        position = {},
     }
+
+    if player.PlayerData.job.name == 'police' or player.PlayerData.job.name == 'ambulance' then
+        activePlayers[playerId].callsign = player.PlayerData.metadata.callsign
+    end
 end
 
 RegisterNetEvent('QBCore:Server:OnPlayerLoaded', function()
-    addOfficer(source)
+    addPlayer(source)
 end)
 
 AddEventHandler('QBCore:Server:OnJobUpdate', function(source, job)
-    local officer = getOfficer(source)
+    local player = getPlayer(source)
 
-    if officer then
-        if officer.group == job.name then
-            activeOfficers[source].grade = job.grade.label
+    if player then
+        if player.group == job.name then
+            activePlayers[source].grade = job.grade.label
             return
         else
             local playerJob = exports.qbx_core:GetJob(job.name)
 
             if playerJob.type ~= 'leo' then
-                removeOfficer(source)
+                removePlayer(source)
                 return
             end
 
-            activeOfficers[source].group = job.name
-            activeOfficers[source].grade = job.grade.label
+            activePlayers[source].group = job.name
+            activePlayers[source].grade = job.grade.label
             return
         end
     end
 
-    addOfficer(source)
+    addPlayer(source)
 end)
 
 AddEventHandler('QBCore:Server:SetDuty', function(source, onDuty)
-    local player = exports.qbx_core:GetPlayer(source)
+    local player = getPlayer(source)
 
-    if player?.PlayerData.job.type ~= 'leo' then return end
-
-    if not onDuty then
-        removeOfficer(source)
-        return
+    if player then
+        if not onDuty then
+            removePlayer(source)
+            return
+        end
     end
 
-    addOfficer(source)
+    addPlayer(source)
 end)
 
 SetInterval(function()
-    local officersArray = {}
-
-    for playerId, officer in pairs(activeOfficers) do
-        local coords = GetEntityCoords(GetPlayerPed(officer.playerId))
-
-        officer.position = coords
-
-        officersArray[playerId] = officer
-    end
-
-    triggerOfficerEvent('qbx_police:client:updatePositions', officersArray)
-    table.wipe(officersArray)
+    triggerPlayersEvent('qbx_dutyblips:client:updatePositions', activePlayers)
 end, config.refreshRate)
