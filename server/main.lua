@@ -31,7 +31,7 @@ local function addPlayer(playerId)
     local groups = {}
 
     for group in pairs(sharedConfig.groups) do
-        groups[group] = true
+        groups[#groups + 1] = group
     end
 
     local hasGroup = exports.qbx_core:HasPrimaryGroup(playerId, groups)
